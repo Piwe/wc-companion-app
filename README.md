@@ -24,7 +24,7 @@ frontend/         React + Vite single-page app (incl. the Betting page)
 anchor/           wc_betting Anchor program (Rust) — Solana smart contract
 betting-program-spec.md   full on-chain program specification
 analytics-schema.md       analytics star schema + Snowflake DDL / ELT design
-architecture.md           system architecture + diagrams (incl. §11 betting)
+architecture.md           system architecture + diagrams (incl. section 11 betting)
 ```
 
 ## Prerequisites
@@ -102,7 +102,7 @@ Premium pays a reduced house fee). Full design in
 
 > ⚠️ **On-chain betting is not live.** The Anchor program is committed as source only and has
 > not been compiled/deployed (it needs the Solana toolchain). The UI shows live odds and payout
-> previews but disables real bet/claim actions. See [`architecture.md`](./architecture.md) §11.1.
+> previews but disables real bet/claim actions. See [`architecture.md`](./architecture.md) section 11.1.
 
 ## Analytics
 
@@ -115,4 +115,12 @@ run the PoC in [`backend/elt/README.md`](./backend/elt/README.md).
 ## Deployment
 
 The MVP targets a single host: the frontend builds to static assets (`vite build → dist/`) and the
-backend runs Uvicorn with a local SQLite file. See [`architecture.md`](./architecture.md) §9.
+backend runs Uvicorn with a local SQLite file. See [`architecture.md`](./architecture.md) section 9.
+
+## Credits
+
+- **Piwe** ([twala.simphiwe@gmail.com](mailto:twala.simphiwe@gmail.com)) — author & maintainer
+- **Claude** (Anthropic — Claude Code, Opus 4.8) — co-developer
+
+The betting framework, analytics pipeline, and supporting docs were built in collaboration with
+Claude Code; see the `Co-Authored-By` trailers in the commit history.
