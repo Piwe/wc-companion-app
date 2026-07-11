@@ -22,3 +22,17 @@ export const useTeamMatches = (id: number) =>
 
 export const useMatch = (id: number) =>
   useQuery({ queryKey: ["match", id], queryFn: () => api.matchDetail(id), staleTime: DAY });
+
+// Betting — pools move with every bet, so cache only briefly.
+const MINUTE = 1000 * 60;
+
+export const useMarkets = () =>
+  useQuery({ queryKey: ["markets"], queryFn: () => api.listMarkets(), staleTime: MINUTE });
+
+export const useWalletBets = (wallet: string | null) =>
+  useQuery({
+    queryKey: ["wallet-bets", wallet],
+    queryFn: () => api.walletBets(wallet as string),
+    enabled: Boolean(wallet),
+    staleTime: MINUTE,
+  });

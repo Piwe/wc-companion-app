@@ -16,3 +16,6 @@ dist/
 .DS_Store
 .idea/
 .vscode/
+
+# Project docs (local only)
+concept.txt

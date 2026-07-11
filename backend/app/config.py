@@ -13,6 +13,12 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./wc.db"
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
+    # --- Betting layer (mirrors the on-chain wc_betting program) ---
+    usdc_decimals: int = 6
+    standard_fee_bps: int = 500  # 5% house fee on profit for Standard-tier bettors
+    premium_fee_bps: int = 200  # 2% reduced fee for Premium-tier bettors
+    betting_program_id: str = ""  # Solana program id, once deployed to devnet
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @property

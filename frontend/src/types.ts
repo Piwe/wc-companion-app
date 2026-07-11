@@ -79,3 +79,50 @@ export interface TeamMatches {
   past: MatchSummary[];
   upcoming: MatchSummary[];
 }
+
+// --- Betting layer ---
+
+export type MarketStatus = "OPEN" | "SETTLED" | "VOIDED";
+export type Outcome = "HOME" | "AWAY";
+
+export interface MarketSummary {
+  match_id: number;
+  status: MarketStatus;
+  outcome: Outcome | null;
+  betting_close_ts: string | null;
+  pool_home: number;
+  pool_away: number;
+  total_pool: number;
+  bet_count: number;
+  odds_home: number | null;
+  odds_away: number | null;
+  market_pubkey: string | null;
+  stage: string | null;
+  group_name: string | null;
+  utc_date: string | null;
+  home_team_id: number | null;
+  away_team_id: number | null;
+  home_team_name: string | null;
+  away_team_name: string | null;
+  home_team_crest: string | null;
+  away_team_crest: string | null;
+}
+
+export interface PayoutPreview {
+  outcome: Outcome;
+  stake: number;
+  projected_profit: number;
+  projected_fee: number;
+  projected_payout: number;
+  odds: number | null;
+}
+
+export interface BetSummary {
+  match_id: number;
+  wallet: string;
+  outcome: Outcome;
+  amount: number;
+  fee_bps: number;
+  claimed: boolean;
+  tx_signature: string | null;
+}

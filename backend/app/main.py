@@ -9,7 +9,7 @@ from app import ingestion
 from app.config import get_settings
 from app.database import SessionLocal, init_db
 from app.models import Team
-from app.routers import admin, groups, matches, teams
+from app.routers import admin, betting, groups, matches, teams
 from app.scheduler import shutdown_scheduler, start_scheduler
 
 logging.basicConfig(level=logging.INFO)
@@ -54,6 +54,7 @@ app.include_router(teams.router)
 app.include_router(groups.router)
 app.include_router(matches.router)
 app.include_router(admin.router)
+app.include_router(betting.router)
 
 
 @app.get("/api/health", tags=["health"])

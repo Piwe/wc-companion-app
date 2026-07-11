@@ -1,7 +1,11 @@
 import type {
+  BetSummary,
   GroupDetail,
   GroupSummary,
+  MarketSummary,
   MatchSummary,
+  Outcome,
+  PayoutPreview,
   TeamMatches,
   TeamStatus,
   TeamSummary,
@@ -25,4 +29,14 @@ export const api = {
   groupDetail: (name: string) => get<GroupDetail>(`/api/groups/${encodeURIComponent(name)}`),
   teamMatches: (id: number) => get<TeamMatches>(`/api/matches/team/${id}`),
   matchDetail: (id: number) => get<MatchSummary>(`/api/matches/${id}`),
+
+  // Betting
+  listMarkets: () => get<MarketSummary[]>("/api/betting/markets"),
+  market: (matchId: number) => get<MarketSummary>(`/api/betting/markets/${matchId}`),
+  previewBet: (matchId: number, outcome: Outcome, amount: number, tier = "STANDARD") =>
+    get<PayoutPreview>(
+      `/api/betting/markets/${matchId}/preview?outcome=${outcome}&amount=${amount}&tier=${tier}`,
+    ),
+  walletBets: (wallet: string) =>
+    get<BetSummary[]>(`/api/betting/wallets/${encodeURIComponent(wallet)}/bets`),
 };

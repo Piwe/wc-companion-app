@@ -83,3 +83,84 @@ class TeamMatches(BaseModel):
     team: TeamSummary
     past: list[MatchSummary]
     upcoming: list[MatchSummary]
+
+
+# --- Betting layer -----------------------------------------------------------
+
+
+class MarketSummary(BaseModel):
+    match_id: int
+    status: str  # OPEN / SETTLED / VOIDED
+    outcome: str | None = None  # HOME / AWAY
+    betting_close_ts: datetime | None = None
+    pool_home: int  # USDC base units
+    pool_away: int
+    total_pool: int
+    bet_count: int
+    odds_home: float | None = None  # gross decimal odds; None if that side is empty
+    odds_away: float | None = None
+    market_pubkey: str | None = None
+    # denormalised match context for display
+    stage: str | None = None
+    group_name: str | None = None
+    utc_date: datetime | None = None
+    home_team_id: int | None = None
+    away_team_id: int | None = None
+    home_team_name: str | None = None
+    away_team_name: str | None = None
+    home_team_crest: str | None = None
+    away_team_crest: str | None = None
+
+
+class BetSummary(BaseModel):
+    match_id: int
+    wallet: str
+    outcome: str
+    amount: int
+    fee_bps: int
+    claimed: bool
+    tx_signature: str | None = None
+
+
+class SubscriptionInfo(BaseModel):
+    wallet: str
+    tier: str
+    expires_at: datetime
+    active: bool
+
+
+class PayoutPreview(BaseModel):
+    outcome: str
+    stake: int
+    projected_profit: int
+    projected_fee: int
+    projected_payout: int
+    odds: float | None = None
+
+
+class ClaimPreview(BaseModel):
+    match_id: int
+    wallet: str
+    result: str  # "won" / "lost" / "refund" / "pending"
+    payout: int  # amount receivable now (0 for a losing/pending bet)
+    fee: int
+
+
+class CreateMarketRequest(BaseModel):
+    match_id: int
+    betting_close_ts: datetime | None = None  # defaults to the match kickoff time
+
+
+class RecordBetRequest(BaseModel):
+    match_id: int
+    wallet: str
+    outcome: str  # HOME / AWAY
+    amount: int  # base units
+    fee_bps: int | None = None  # defaults to Standard-tier fee
+    tx_signature: str | None = None
+
+
+class RecordSubscriptionRequest(BaseModel):
+    wallet: str
+    tier: str  # STANDARD / PREMIUM
+    expires_at: datetime
