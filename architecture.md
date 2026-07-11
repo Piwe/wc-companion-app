@@ -405,3 +405,14 @@ funds** — that lives only in the on-chain program.
 **Verified here:** the backend betting layer (parimutuel math + mirror + endpoints) passes its
 8-test suite, and the frontend `npm run build` (tsc + vite) is clean. Everything unverified above
 is on-chain or depends on a deployed program.
+
+### 11.2 Analytics event log (warehouse-ready)
+
+The betting layer also writes an **append-only event log** (`analytics_events`) in the same
+transaction as each mirror update — the landing zone for a future analytical warehouse
+(e.g. Snowflake). Events carry a monotonic `event_id` (extraction watermark), UTC timestamps, an
+idempotency `dedupe_key`, and a canonical-JSON `payload` (→ Snowflake `VARIANT`); money stays in
+integer USDC base units. An admin-only watermark feed
+(`GET /api/betting/analytics/events?after_id=`) is the loader-agnostic extraction interface. This
+is **implemented and tested**; the warehouse itself (staging, dbt star schema) is **design only** —
+see [`analytics-schema.md`](./analytics-schema.md).

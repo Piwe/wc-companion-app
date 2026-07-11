@@ -164,3 +164,24 @@ class RecordSubscriptionRequest(BaseModel):
     wallet: str
     tier: str  # STANDARD / PREMIUM
     expires_at: datetime
+
+
+class RecordClaimRequest(BaseModel):
+    match_id: int
+    wallet: str
+    payout: int  # base units transferred to the bettor
+    fee: int  # base units routed to treasury
+    refunded: bool = False  # True when the market was voided (stake refunded)
+    tx_signature: str | None = None
+
+
+class AnalyticsEventOut(BaseModel):
+    event_id: int
+    event_type: str
+    occurred_at: datetime
+    ingested_at: datetime
+    schema_version: int
+    match_id: int | None = None
+    wallet: str | None = None
+    tx_signature: str | None = None
+    payload: dict

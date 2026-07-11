@@ -112,3 +112,29 @@ class Subscription(Base):
     wallet: Mapped[str] = mapped_column(String, primary_key=True)
     tier: Mapped[str] = mapped_column(String)  # STANDARD / PREMIUM
     expires_at: Mapped[datetime] = mapped_column()
+
+
+class AnalyticsEvent(Base):
+    """Append-only, immutable event log — the analytics landing zone.
+
+    Every betting state change writes one row here in the *same transaction* as the
+    mirror update, so history and current state never diverge. This is the source an
+    ELT job extracts (incrementally, by monotonic ``event_id``) into a warehouse such
+    as Snowflake, where dbt models it into the star schema (see analytics-schema.md).
+    Rows are never updated or deleted.
+    """
+
+    __tablename__ = "analytics_events"
+
+    event_id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)  # extraction watermark
+    event_type: Mapped[str] = mapped_column(String, index=True)
+    occurred_at: Mapped[datetime] = mapped_column(index=True)  # when the business event happened (UTC)
+    ingested_at: Mapped[datetime] = mapped_column()  # when we recorded it (UTC)
+    schema_version: Mapped[int] = mapped_column(default=1)  # payload contract version
+    # Denormalised keys for cheap filtering; full detail lives in payload.
+    match_id: Mapped[int | None] = mapped_column(nullable=True, index=True)
+    wallet: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    tx_signature: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Idempotency: a repeated dedupe_key (e.g. from an indexer replay) is a no-op.
+    dedupe_key: Mapped[str | None] = mapped_column(String, nullable=True, unique=True)
+    payload: Mapped[str] = mapped_column(String)  # canonical JSON; maps to a Snowflake VARIANT

@@ -1,7 +1,17 @@
 """Convert ORM rows into API schema objects."""
 
+import json
+
 from app import betting, schemas
-from app.models import BetRecord, BettingMarket, Match, Standing, Subscription, Team
+from app.models import (
+    AnalyticsEvent,
+    BetRecord,
+    BettingMarket,
+    Match,
+    Standing,
+    Subscription,
+    Team,
+)
 
 
 def team_summary(team: Team) -> schemas.TeamSummary:
@@ -96,4 +106,18 @@ def subscription_info(sub: Subscription, now) -> schemas.SubscriptionInfo:
         tier=sub.tier,
         expires_at=sub.expires_at,
         active=sub.expires_at > now,
+    )
+
+
+def analytics_event(event: AnalyticsEvent) -> schemas.AnalyticsEventOut:
+    return schemas.AnalyticsEventOut(
+        event_id=event.event_id,
+        event_type=event.event_type,
+        occurred_at=event.occurred_at,
+        ingested_at=event.ingested_at,
+        schema_version=event.schema_version,
+        match_id=event.match_id,
+        wallet=event.wallet,
+        tx_signature=event.tx_signature,
+        payload=json.loads(event.payload),
     )

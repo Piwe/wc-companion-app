@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import betting, schemas, serializers
+from app import analytics, betting, schemas, serializers
 from app.config import get_settings
 from app.database import get_db
 from app.models import (
@@ -23,6 +23,7 @@ from app.models import (
     MARKET_VOIDED,
     OUTCOME_AWAY,
     OUTCOME_HOME,
+    AnalyticsEvent,
     BetRecord,
     BettingMarket,
     Match,
@@ -166,6 +167,18 @@ def create_market(req: schemas.CreateMarketRequest, db: Session = Depends(get_db
 
     market = BettingMarket(match_id=req.match_id, status=MARKET_OPEN, betting_close_ts=close_ts)
     db.add(market)
+    analytics.emit(
+        db,
+        analytics.MARKET_CREATED,
+        {
+            "match_id": req.match_id,
+            "home_team_id": match.home_team_id,
+            "away_team_id": match.away_team_id,
+            "betting_close_ts": close_ts.isoformat() if close_ts else None,
+        },
+        match_id=req.match_id,
+        dedupe_key=f"{analytics.MARKET_CREATED}:{req.match_id}",
+    )
     db.commit()
     db.refresh(market)
     return serializers.market_summary(market)
@@ -195,18 +208,45 @@ def settle_market(match_id: int, req: SettleMarketRequest, db: Session = Depends
             # DRAW (or any non-team winner) -> void & refund (spec §5).
             outcome = _WINNER_TO_OUTCOME.get(match.winner)
 
-    if outcome is None:
-        market.status = MARKET_VOIDED
-        market.outcome = None
-    else:
+    if outcome is not None:
         # Empty-winning-pool guard (spec §6.4): nobody to pay -> void & refund everyone.
         winning_pool = market.pool_home if outcome == OUTCOME_HOME else market.pool_away
         if winning_pool == 0:
-            market.status = MARKET_VOIDED
-            market.outcome = None
-        else:
-            market.status = MARKET_SETTLED
-            market.outcome = outcome
+            outcome = None
+
+    if outcome is None:
+        market.status = MARKET_VOIDED
+        market.outcome = None
+        analytics.emit(
+            db,
+            analytics.MARKET_VOIDED,
+            {
+                "match_id": match_id,
+                "pool_home": market.pool_home,
+                "pool_away": market.pool_away,
+                "total_pool": market.pool_home + market.pool_away,
+            },
+            match_id=match_id,
+            dedupe_key=f"{analytics.MARKET_VOIDED}:{match_id}",
+        )
+    else:
+        market.status = MARKET_SETTLED
+        market.outcome = outcome
+        winning_pool = market.pool_home if outcome == OUTCOME_HOME else market.pool_away
+        analytics.emit(
+            db,
+            analytics.MARKET_SETTLED,
+            {
+                "match_id": match_id,
+                "outcome": outcome,
+                "pool_home": market.pool_home,
+                "pool_away": market.pool_away,
+                "total_pool": market.pool_home + market.pool_away,
+                "winning_pool": winning_pool,
+            },
+            match_id=match_id,
+            dedupe_key=f"{analytics.MARKET_SETTLED}:{match_id}",
+        )
 
     db.commit()
     db.refresh(market)
@@ -260,6 +300,24 @@ def record_bet(req: schemas.RecordBetRequest, db: Session = Depends(get_db)):
     else:
         market.pool_away += req.amount
 
+    analytics.emit(
+        db,
+        analytics.BET_PLACED,
+        {
+            "match_id": req.match_id,
+            "wallet": req.wallet,
+            "outcome": outcome,
+            "amount": req.amount,  # this placement only (grain = one placement event)
+            "fee_bps": fee_bps,
+            "new_pool_home": market.pool_home,
+            "new_pool_away": market.pool_away,
+        },
+        match_id=req.match_id,
+        wallet=req.wallet,
+        tx_signature=req.tx_signature,
+        dedupe_key=f"{analytics.BET_PLACED}:{req.tx_signature}" if req.tx_signature else None,
+    )
+
     db.commit()
     db.refresh(bet)
     return serializers.bet_summary(bet)
@@ -284,6 +342,81 @@ def record_subscription(req: schemas.RecordSubscriptionRequest, db: Session = De
     else:
         sub.tier = tier
         sub.expires_at = expires_at
+    analytics.emit(
+        db,
+        analytics.SUBSCRIPTION_CREATED,
+        {"wallet": req.wallet, "tier": tier, "expires_at": expires_at.isoformat()},
+        wallet=req.wallet,
+    )
     db.commit()
     db.refresh(sub)
     return serializers.subscription_info(sub, _now())
+
+
+@router.post(
+    "/admin/claims", response_model=schemas.BetSummary, dependencies=[Depends(require_admin)]
+)
+def record_claim(req: schemas.RecordClaimRequest, db: Session = Depends(get_db)):
+    """Record an on-chain Claimed event into the mirror (indexer ingestion)."""
+    market = _get_market(db, req.match_id)
+    if market.status == MARKET_OPEN:
+        raise HTTPException(status_code=409, detail="Market is not resolved; nothing to claim")
+
+    bet = db.scalar(
+        select(BetRecord).where(
+            BetRecord.match_id == req.match_id, BetRecord.wallet == req.wallet
+        )
+    )
+    if bet is None:
+        raise HTTPException(status_code=404, detail="No bet for wallet on this market")
+
+    bet.claimed = True
+    if req.tx_signature:
+        bet.tx_signature = req.tx_signature
+
+    analytics.emit(
+        db,
+        analytics.BET_CLAIMED,
+        {
+            "match_id": req.match_id,
+            "wallet": req.wallet,
+            "payout": req.payout,
+            "fee": req.fee,
+            "refunded": req.refunded,
+        },
+        match_id=req.match_id,
+        wallet=req.wallet,
+        tx_signature=req.tx_signature,
+        dedupe_key=(
+            f"{analytics.BET_CLAIMED}:{req.tx_signature}"
+            if req.tx_signature
+            else f"{analytics.BET_CLAIMED}:{req.match_id}:{req.wallet}"
+        ),
+    )
+    db.commit()
+    db.refresh(bet)
+    return serializers.bet_summary(bet)
+
+
+@router.get(
+    "/analytics/events",
+    response_model=list[schemas.AnalyticsEventOut],
+    dependencies=[Depends(require_admin)],
+)
+def analytics_events(
+    after_id: int = Query(default=0, ge=0, description="Return events with event_id > this"),
+    limit: int = Query(default=500, gt=0, le=5000),
+    event_type: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    """Watermark-based extraction feed for the warehouse ELT.
+
+    Poll with the last ``event_id`` you saw as ``after_id`` to pull only new events, in
+    order. This is the loader-agnostic interface an ELT job / Fivetran custom connector
+    reads to land rows in Snowflake (see analytics-schema.md).
+    """
+    stmt = select(AnalyticsEvent).where(AnalyticsEvent.event_id > after_id)
+    if event_type is not None:
+        stmt = stmt.where(AnalyticsEvent.event_type == event_type)
+    events = db.scalars(stmt.order_by(AnalyticsEvent.event_id).limit(limit)).all()
+    return [serializers.analytics_event(e) for e in events]
