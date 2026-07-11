@@ -6,3 +6,4 @@ pydantic-settings==2.7.0
 httpx==0.28.1
 apscheduler==3.11.0
 pytest==8.3.4
+duckdb==1.5.4  # analytics ELT proof-of-concept (elt/) + its integration test

@@ -4,6 +4,7 @@ __pycache__/
 .venv/
 venv/
 *.db
+*.duckdb
 backend/data/snapshot.json
 .env
 

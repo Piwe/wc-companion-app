@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from app import betting
 from app.database import SessionLocal
 from app.main import app
-from app.models import BetRecord, BettingMarket, Match, Subscription, Team
+from app.models import AnalyticsEvent, BetRecord, BettingMarket, Match, Subscription, Team
 
 ADMIN = {"X-Admin-Token": "change-me"}
 USDC = 1_000_000  # 1 USDC in base units
@@ -90,6 +90,10 @@ def _seed(_c):
 def _cleanup():
     db = SessionLocal()
     try:
+        db.query(AnalyticsEvent).filter(AnalyticsEvent.match_id == MATCH_ID).delete()
+        db.query(AnalyticsEvent).filter(
+            AnalyticsEvent.wallet.in_(["alice", "whale", "bob"])
+        ).delete(synchronize_session=False)
         db.query(BetRecord).filter(BetRecord.match_id == MATCH_ID).delete()
         db.query(BettingMarket).filter(BettingMarket.match_id == MATCH_ID).delete()
         db.query(Subscription).filter(
