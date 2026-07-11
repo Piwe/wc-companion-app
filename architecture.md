@@ -344,3 +344,64 @@ last-good data even if the upstream API is briefly unavailable.
 | SQLite + single daily refresh | Zero infra, matches "daily static update" scope | Not suited to live/real-time data |
 | React Query only (no Redux) | Server state is the only meaningful state | Little benefit if the app later needs rich client state |
 | Snapshot fallback | Dev works offline; resilient to API outages | Snapshot can be stale if the API is down for long |
+
+---
+
+## 11. Betting framework (Solana) — add-on
+
+An optional on-chain layer for **parimutuel match-winner betting** with USDC and tiered
+subscriptions, targeting Solana **devnet** first. Full design in
+[`betting-program-spec.md`](./betting-program-spec.md); on-chain build/deploy steps in
+[`anchor/README.md`](./anchor/README.md).
+
+```mermaid
+graph TB
+    subgraph OnChain["On-chain — wc_betting Anchor program (Rust)"]
+        Prog["Instructions: create_market · place_bet ·<br/>settle_market · void_market · claim · subscribe"]
+        PDAs["PDAs: Config · Market(+vault) · Bet · Subscription"]
+        Prog --> PDAs
+    end
+    subgraph Backend["Backend — betting layer (FastAPI)"]
+        Math["betting.py — parimutuel math"]
+        Mirror["Mirror tables: BettingMarket · BetRecord · Subscription"]
+        BRoutes["routers/betting.py — public reads +<br/>admin/oracle/indexer endpoints"]
+        BRoutes --> Mirror
+        BRoutes --> Math
+    end
+    subgraph FE["Frontend — Betting page"]
+        Page["Betting.tsx — odds/pools/payout preview"]
+        Wallet["wallet.ts — Phantom connect"]
+        Disc["BettingDisclaimer banner"]
+    end
+
+    Page -->|"/api/betting/*"| BRoutes
+    BRoutes -. "future: oracle settle / indexer" .-> Prog
+    Wallet -. "future: sign place_bet/claim/subscribe" .-> Prog
+
+    classDef pend fill:#fde68a,stroke:#b45309,color:#1c1917;
+    class OnChain pend;
+```
+
+**Money model:** parimutuel — all stakes on a match pool together; winners split the pool
+proportionally, fee charged **on profit** at the bettor's snapshotted tier rate. Only HOME/AWAY
+are offered; a `DRAW` result **voids** the market and refunds everyone. The backend is the oracle
+(maps `Match.winner`/`FINISHED` → settle/void) and the read-model indexer; **it never custodies
+funds** — that lives only in the on-chain program.
+
+### 11.1 Verification status — ⚠️ unverified / not-yet-live components
+
+> The pieces below are **committed source only** and have **not** been verified end-to-end.
+> Do not treat them as production-ready until the steps in each row are completed.
+
+| Component | Status | What's unverified / required |
+| --------- | ------ | ---------------------------- |
+| `anchor/` Rust program | **Source only — never compiled or tested** | No Rust/Solana/Anchor toolchain in the dev environment. Needs `anchor build && anchor test` on a toolchain-equipped machine before it can be trusted. |
+| Program id (`declare_id!` + `Anchor.toml`) | **Placeholder** (anchor default id) | Run `anchor keys sync` after the first `anchor build`, then propagate the real id to backend (`betting_program_id`) and frontend. |
+| Frontend wallet (`wallet.ts`) | **Phantom-only, read-address** | Uses the injected `window.solana` provider with no new deps. Swap for `@solana/wallet-adapter` to support more wallets and to build/sign real transactions. |
+| On-chain bet / claim / subscribe from UI | **Disabled** | Bet button is inert; the disclaimer banner explains the program must be deployed first. Odds and payout previews are live (backend math), but no funds move. |
+| Backend `/api/betting/admin/bets` & `/admin/subscriptions` | **Indexer stand-ins** | These admin endpoints simulate what a real Solana **event listener** (program logs / Helius webhooks) will write into the mirror tables once the program is deployed. |
+| Auth | **Not implemented** | Sign-In-With-Solana (SIWS) nonce→signature→JWT is designed but not built; wallet reads are currently unauthenticated. |
+
+**Verified here:** the backend betting layer (parimutuel math + mirror + endpoints) passes its
+8-test suite, and the frontend `npm run build` (tsc + vite) is clean. Everything unverified above
+is on-chain or depends on a deployed program.
